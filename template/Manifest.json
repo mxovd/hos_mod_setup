@@ -1,0 +1,8 @@
+{
+    "modName": "${mod_name}",
+    "modVersion": "${mod_version}",
+    "modAuthor": "${mod_author}",
+    "supportedGameVersion": "${supported_game_version}",
+    "dependencies": "HarmonyCore",
+    "modDescription": "${mod_description}"
+}
