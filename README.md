@@ -128,11 +128,7 @@ Environment variables exported in your shell take precedence over `.env`, so you
 
 ## Contributing
 
-Issues and PRs are welcome. Some ideas:
-
-- Allow custom Harmony package selection (thin vs full).
-- Handle alternate Hex of Steel install paths via configuration/env vars.
-- Add tests or lint checks for templated files.
+Issues and PRs are welcome.
 
 ---
 
