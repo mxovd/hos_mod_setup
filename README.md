@@ -54,7 +54,7 @@ python hos_mod_utils.py [options]
 ### Available Options
 
 - `-g`, `--get-dlls`: Refresh the `Libraries/` directory by copying the required assemblies from the Hex of Steel install and download the latest Harmony Thin package. As part of this process, ILSpy decompiles the stock `Assembly-CSharp.dll` into `decompiled/<version>/`. Run this whenever the game updates.
-- `-d`, `--deploy`: Build the C# project (via `dotnet build --configuration Release`) and stage the packaged mod under `package/`. Each package has the form `package/${mod_slug}-vX.Y.Z-N/` with `Multiplayer Tile Pings` replaced by your mod’s folder name.
+- `-d`, `--deploy`: Build the C# project (via `dotnet build --configuration Release`) and stage the packaged mod under `package/`. Each package has the form `package/${mod_slug}-vX.Y.Z-N/<mod folder name>/` so it’s ready to drop into Hex of Steel.
 - `-i`, `--install`: Copy the most recently deployed package into Hex of Steel’s `MODS` directory. This option only has an effect when combined with `--deploy`.
 
 Examples:
@@ -85,7 +85,7 @@ When you run `--deploy`, the script:
 
 1. Reads `Manifest.json` to capture the mod version.
 2. Builds the C# project, producing `output/net48/<ModAssembly>.dll`.
-3. Creates `package/${mod_slug}-v<version>-<n>/Multiplayer Tile Pings/` (name adjusted to match your mod), copying:
+3. Creates `package/${mod_slug}-v<version>-<n>/${mod_folder_name}/`, copying:
    - `Manifest.json`
    - Built DLL under `Libraries/`
    - All files from `assets/`
