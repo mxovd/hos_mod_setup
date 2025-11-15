@@ -413,6 +413,14 @@ def parse_args() -> tuple[argparse.Namespace, argparse.ArgumentParser]:
         action="store_true",
         help="Decompile Assembly-CSharp.dll and refresh Libraries from the Hex of Steel installation.",
     )
+    parser.add_argument(
+        "--refresh-lib",
+        "--refresh-libs",
+        "-r",
+        dest="refresh_libs",
+        action="store_true",
+        help="Refresh the Libraries directory before building (default is to skip).",
+    )
     return parser.parse_args(), parser
 
 
@@ -427,14 +435,17 @@ def install_package(package_root: Path) -> Path:
     return target_path
 
 
-def build_and_package(root: Path, install: bool) -> None:
+def build_and_package(root: Path, install: bool, refresh_libs: bool = False) -> None:
     manifest_path = root / "Manifest.json"
     project_path = root / PROJECT_FILENAME
     output_dll = root / "output" / "net48" / OUTPUT_DLL_NAME
     package_root = root / "package"
     assets_dir = root / "assets"
 
-    refresh_libraries(root)
+    if refresh_libs:
+        refresh_libraries(root)
+    else:
+        print("Skipping Libraries refresh (use --refresh-libs to enable)")
 
     if not manifest_path.exists():
         raise SystemExit(f"manifest.json not found at {manifest_path}")
@@ -537,7 +548,7 @@ if __name__ == "__main__":
             performed_action = True
 
         if args.deploy:
-            build_and_package(root, args.install)
+            build_and_package(root, args.install, args.refresh_libs)
             performed_action = True
 
         if not performed_action:
