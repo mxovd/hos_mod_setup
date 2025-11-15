@@ -11,7 +11,7 @@ This repository helps you bootstrap and maintain Hex of Steel mods with a repeat
 - Python 3.10 or newer available on your PATH.
 - .NET SDK 6.0+ (needed for `dotnet build`).
 - `ilspycmd` installed (available via [`dotnet tool install ilspycmd`](https://github.com/icsharpcode/ILSpy)).
-- Hex of Steel installed through Steam (location defaults to the Flatpak install path).
+- Hex of Steel installed.
 - Internet access (for the first run) so Harmony can be downloaded from NuGet.
 
 ## Scaffolding a New Mod
