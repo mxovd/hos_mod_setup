@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -13,6 +14,7 @@ import sys
 import tempfile
 import zipfile
 from pathlib import Path
+from typing import NoReturn
 from urllib import error as urlerror
 from urllib import request as urlrequest
 
@@ -21,11 +23,6 @@ PACKAGE_PREFIX = "${package_prefix}"
 PROJECT_FILENAME = "${project_filename}"
 OUTPUT_DLL_NAME = "${output_dll_name}"
 MOD_FOLDER_NAME = "${mod_folder_name}"
-
-GAME_MANAGED_DIR = Path.home() / (
-    ".var/app/com.valvesoftware.Steam/.steam/steam/steamapps/common/Hex of Steel/"
-    "Hex of Steel_Data/Managed"
-)
 
 REQUIRED_DLLS = [
     "Assembly-CSharp.dll",
@@ -45,6 +42,241 @@ REQUIRED_DLLS = [
 
 HARMONY_PACKAGE_ID = "lib.harmony.thin"
 NUGET_FLAT_BASE_URL = "https://api.nuget.org/v3-flatcontainer"
+
+
+def _apply_env_file(env_path: Path) -> None:
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        if "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+
+        if not key:
+            continue
+
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            value = value[1:-1]
+
+        os.environ.setdefault(key, value)
+
+
+def load_env_overrides() -> None:
+    """Load .env files located next to this script or its parent directory."""
+
+    script_dir = Path(__file__).resolve().parent
+    search_dirs = [script_dir]
+    parent_dir = script_dir.parent
+    if parent_dir != script_dir:
+        search_dirs.append(parent_dir)
+
+    seen: set[Path] = set()
+    for directory in search_dirs:
+        if directory in seen:
+            continue
+        seen.add(directory)
+        env_path = directory / ".env"
+        if env_path.exists():
+            _apply_env_file(env_path)
+
+
+load_env_overrides()
+
+
+def _raise_missing_path(description: str, env_var: str, candidates: list[Path]) -> NoReturn:
+    lines = "\n".join(f" - {candidate}" for candidate in candidates) or " - (no predefined locations)"
+    raise SystemExit(
+        f"Could not locate {description}.\n"
+        f"Checked the following paths:\n{lines}\n"
+        f"Set {env_var} in your environment or in the closest .env file to override the detection."
+    )
+
+
+def determine_mod_install_path() -> Path:
+    """Return the most likely Hex of Steel MODS directory.
+
+    Preference order:
+    1. Environment variable ``HOS_MODS_PATH`` if defined.
+    2. Flatpak Steam path (default on Linux/Steam Deck).
+    3. Native Linux config path (Unity3D under ~/.config).
+    4. Windows LocalLow path.
+    5. Fallback directory under ~/Hex of Steel/MODS.
+    """
+
+    candidates: list[Path] = []
+    env_path = os.environ.get("HOS_MODS_PATH")
+    if env_path:
+        candidates.append(Path(env_path).expanduser())
+
+    flatpak_path = (
+        Path.home()
+        / ".var"
+        / "app"
+        / "com.valvesoftware.Steam"
+        / "config"
+        / "unity3d"
+        / "War Frogs Studio"
+        / "Hex of Steel"
+        / "MODS"
+    )
+    native_linux_path = (
+        Path.home()
+        / ".config"
+        / "unity3d"
+        / "War Frogs Studio"
+        / "Hex of Steel"
+        / "MODS"
+    )
+    macos_path = (
+        Path.home()
+        / "Library"
+        / "Application Support"
+        / "War Frogs Studio"
+        / "Hex of Steel"
+        / "MODS"
+    )
+    windows_locallow_path = (
+        Path.home()
+        / "AppData"
+        / "LocalLow"
+        / "War Frogs Studio"
+        / "Hex of Steel"
+        / "MODS"
+    )
+    fallback_path = Path.home() / "Hex of Steel" / "MODS"
+
+    candidates.extend(
+        [flatpak_path, native_linux_path, macos_path, windows_locallow_path, fallback_path]
+    )
+
+    # Remove duplicates while preserving order
+    unique_candidates: list[Path] = []
+    seen = set()
+    for path in candidates:
+        resolved = path.expanduser()
+        if resolved not in seen:
+            unique_candidates.append(resolved)
+            seen.add(resolved)
+
+    for path in unique_candidates:
+        if path.exists() and path.is_dir():
+            return path
+
+    _raise_missing_path(
+        "the Hex of Steel MODS directory",
+        "HOS_MODS_PATH",
+        unique_candidates,
+    )
+
+
+def determine_game_managed_dir() -> Path:
+    """Return the most likely Hex of Steel Managed directory.
+
+    Honors ``HOS_MANAGED_DIR`` first, then common Steam install paths across
+    Linux (Flatpak and native), macOS, and Windows, finally falling back to a
+    directory under the user's home folder.
+    """
+
+    candidates: list[Path] = []
+    env_path = os.environ.get("HOS_MANAGED_DIR")
+    if env_path:
+        candidates.append(Path(env_path).expanduser())
+
+    flatpak_managed = Path.home() / (
+        ".var/app/com.valvesoftware.Steam/.steam/steam/steamapps/common/Hex of Steel/"
+        "Hex of Steel_Data/Managed"
+    )
+    native_linux_managed = Path.home() / (
+        ".steam/steam/steamapps/common/Hex of Steel/Hex of Steel_Data/Managed"
+    )
+    linux_local_share = Path.home() / (
+        ".local/share/Steam/steamapps/common/Hex of Steel/Hex of Steel_Data/Managed"
+    )
+    steam_library_under_home = Path.home() / (
+        "SteamLibrary/steamapps/common/Hex of Steel/Hex of Steel_Data/Managed"
+    )
+    mac_app_bundle = Path("/Applications/Hex of Steel.app/Contents/Resources/Data/Managed")
+    mac_steam_bundle = (
+        Path.home()
+        / "Library"
+        / "Application Support"
+        / "Steam"
+        / "steamapps"
+        / "common"
+        / "Hex of Steel"
+        / "Hex of Steel.app"
+        / "Contents"
+        / "Resources"
+        / "Data"
+        / "Managed"
+    )
+    mac_config_copy = (
+        Path.home()
+        / "Library"
+        / "Application Support"
+        / "War Frogs Studio"
+        / "Hex of Steel"
+        / "Hex of Steel_Data"
+        / "Managed"
+    )
+
+    windows_roots = [
+        os.environ.get("ProgramFiles(x86)"),
+        os.environ.get("ProgramFiles"),
+        "C:/Program Files (x86)",
+    ]
+    windows_candidates = []
+    for root in windows_roots:
+        if not root:
+            continue
+        windows_candidates.append(
+            Path(root)
+            / "Steam"
+            / "steamapps"
+            / "common"
+            / "Hex of Steel"
+            / "Hex of Steel_Data"
+            / "Managed"
+        )
+
+    fallback_path = Path.home() / "Hex of Steel_Data" / "Managed"
+
+    candidates.extend(
+        [
+            flatpak_managed,
+            native_linux_managed,
+            linux_local_share,
+            steam_library_under_home,
+            mac_app_bundle,
+            mac_steam_bundle,
+            mac_config_copy,
+            *windows_candidates,
+            fallback_path,
+        ]
+    )
+
+    unique_candidates: list[Path] = []
+    seen = set()
+    for path in candidates:
+        resolved = Path(path).expanduser()
+        if resolved not in seen:
+            unique_candidates.append(resolved)
+            seen.add(resolved)
+
+    for path in unique_candidates:
+        if path.exists() and path.is_dir():
+            return path
+
+    _raise_missing_path(
+        "the Hex of Steel Managed directory",
+        "HOS_MANAGED_DIR",
+        unique_candidates,
+    )
 
 
 def download_latest_harmony() -> tuple[str, bytes]:
@@ -120,8 +352,9 @@ def run(command: list[str], *, cwd: Path) -> None:
 
 
 def refresh_libraries(root: Path) -> None:
-    if not GAME_MANAGED_DIR.exists() or not GAME_MANAGED_DIR.is_dir():
-        raise SystemExit(f"Managed directory not found at {GAME_MANAGED_DIR}")
+    managed_dir = determine_game_managed_dir()
+    if not managed_dir.exists() or not managed_dir.is_dir():
+        raise SystemExit(f"Managed directory not found at {managed_dir}")
 
     libraries_dir = root / "Libraries"
     libraries_dir.mkdir(parents=True, exist_ok=True)
@@ -133,7 +366,7 @@ def refresh_libraries(root: Path) -> None:
             dll_path.unlink(missing_ok=True)
 
     for dll_name in REQUIRED_DLLS:
-        source = GAME_MANAGED_DIR / dll_name
+        source = managed_dir / dll_name
         if not source.exists():
             raise SystemExit(f"Required library {dll_name} missing at {source}")
         shutil.copy2(source, libraries_dir / dll_name)
@@ -184,17 +417,7 @@ def parse_args() -> tuple[argparse.Namespace, argparse.ArgumentParser]:
 
 
 def install_package(package_root: Path) -> Path:
-    install_root = (
-        Path.home()
-        / ".var"
-        / "app"
-        / "com.valvesoftware.Steam"
-        / "config"
-        / "unity3d"
-        / "War Frogs Studio"
-        / "Hex of Steel"
-        / "MODS"
-    )
+    install_root = determine_mod_install_path()
     target_path = install_root / package_root.name
 
     install_root.mkdir(parents=True, exist_ok=True)
@@ -256,7 +479,7 @@ def build_and_package(root: Path, install: bool) -> None:
 def run_decompilation(root: Path) -> Path:
     refresh_libraries(root)
 
-    assembly_path = GAME_MANAGED_DIR / "Assembly-CSharp.dll"
+    assembly_path = determine_game_managed_dir() / "Assembly-CSharp.dll"
 
     if not assembly_path.exists():
         raise SystemExit(f"Assembly-CSharp.dll not found at {assembly_path}")

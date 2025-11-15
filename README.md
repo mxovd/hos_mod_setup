@@ -37,8 +37,11 @@ What the scaffolder does:
 1. Copies files from `template/`, substituting placeholders with your metadata.
 2. Creates an empty `assets/` directory inside the new mod.
 3. Runs `hos_mod_utils.py --get-dlls` in the new mod root, which downloads Harmony, copies the game DLLs from your Hex of Steel installation, and decompiles `Assembly-CSharp.dll` into `decompiled/<version>/`.
+4. Drops a `.env` file in the mod root so you can override detection paths later (only necessary if the tool can't detect the paths automatically).
 
 After scaffolding, your mod folder contains everything needed to build or distribute the project.
+
+> **Path detection safety.** Before any files are copied, the scaffolder now verifies it can find both the Hex of Steel `MODS` directory and the `Hex of Steel_Data/Managed` folder. If either location is missing, the script exits early with instructions to update the `.env` file.
 
 ## Using `hos_mod_utils.py`
 
@@ -90,6 +93,25 @@ When you run `--deploy`, the script:
 
 You can zip the generated package folder and distribute it directly to players.
 
+## Configuring Hex of Steel Paths via `.env`
+
+Both `mod_folder_setup.py` and every generated `hos_mod_utils.py` read a local `.env` file before attempting to locate the Hex of Steel installation. The file ships with commented placeholders:
+
+```
+# HOS_MANAGED_DIR="/absolute/path/to/Hex of Steel/Hex of Steel_Data/Managed"
+# HOS_MODS_PATH="/absolute/path/to/War Frogs Studio/Hex of Steel/MODS"
+```
+
+You can try to run the tool first to see if the tool is able to determine these path by itself. If it fails, adjust the paths in the .env folder.
+
+Steps:
+
+1. Edit the root `.env` file (or the copy inside an individual mod) and uncomment the variables that apply to your setup.
+2. Provide absolute paths to the managed DLL folder and the MODS folder.
+3. Re-run `mod_folder_setup.py` or `hos_mod_utils.py`; the scripts pick up the overrides automatically.
+
+Environment variables exported in your shell take precedence over `.env`, so you can still override them per-session if needed.
+
 ## Project Template Notes
 
 - The C# project targets `net48` and references the game’s assemblies. Harmony is downloaded lazily (first run of `--get-dlls`) and kept alongside the template for convenience.
@@ -98,7 +120,8 @@ You can zip the generated package folder and distribute it directly to players.
 
 ## Troubleshooting
 
-- **Managed directory not found**: Ensure Hex of Steel is installed via Steam Flatpak (default path hard-coded). If you’re on a different install path, adapt `GAME_MANAGED_DIR` in `hos_mod_utils.py`.
+- **Managed directory not found**: Set `HOS_MANAGED_DIR` in `.env` (or export it) to point at `Hex of Steel_Data/Managed`, then rerun the command so the DLL copy step can succeed.
+- **MODS directory not found**: Set `HOS_MODS_PATH` in `.env` (or export it) to the directory Hex of Steel reads mods from.
 - **`ilspycmd` missing**: Add it via `dotnet tool install --global ilspycmd` or update `PATH` so `hos_mod_utils.py` can call it.
 - **No Harmony DLL**: The utility downloads the latest `lib.harmony.thin` package from NuGet. If you need the full Harmony build, replace the downloaded `0Harmony.dll` in `Libraries/` manually and the script will reuse it.
 - **Build errors**: Confirm that .NET SDK 6.0 (or newer) is installed and `dotnet` is available. Unity assemblies require the mono fallback, so Windows-specific builds may fail without the right references.
