@@ -88,7 +88,7 @@ When you run `--deploy`, the script:
 3. Creates `package/${mod_slug}-v<version>-<n>/${mod_folder_name}/`, copying:
    - `Manifest.json`
    - Built DLL under `Libraries/`
-   - All files from `assets/`
+   - All files from `assets/`.
 4. Optionally installs the package (if `--install` is supplied).
 
 You can zip the generated package folder and distribute it directly to players.
@@ -116,7 +116,7 @@ Environment variables exported in your shell take precedence over `.env`, so you
 
 - The C# project targets `net48` and references the game’s assemblies. Harmony is downloaded lazily (first run of `--get-dlls`) and kept alongside the template for convenience.
 - Add your custom scripts under `Scripts/` in the mod. The scaffolder renames `TemplateScript.cs` to `${mod_class_name}.cs` and updates the namespaces/identifiers to match your mod.
-- Any files you drop in `assets/` get included in the deploy stage, so use it for thumbnails, sounds, or other data.
+- Use the `assets/` folder for every content tweak Hex of Steel expects alongside your DLL—units, scenarios, countries, sounds, videos, wallpapers, etc. Mirror the directory layout that the Hex of Steel in-game mod creator generates (e.g., `assets/Maps`, `assets/Musics`, and so on); the deploy step copies this tree verbatim into the packaged mod so the game picks it up without extra work.
 
 ## Troubleshooting
 
